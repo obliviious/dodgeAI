@@ -3,7 +3,7 @@ import type pg from "pg";
 import type { Driver } from "neo4j-driver";
 import { chatJson, extractJsonObject } from "./groq.js";
 import {
-  ANSWER_SYSTEM,
+  ANSWER_JSON_SYSTEM,
   CYPHER_SCHEMA_PROMPT,
   GEN_CYPHER_SYSTEM,
   GEN_SQL_SYSTEM,
@@ -36,39 +36,43 @@ function validateCypher(q: string): string {
 const ENTITY_TYPES_GID =
   "SalesOrder|Delivery|BillingDocument|JournalEntry|Payment|BusinessPartner|Product|Plant|SalesOrderItem";
 
-/** Pull canonical `Type:id` mentions out of assistant Markdown (bold, lists, tables). */
-function extractGidsFromMarkdown(text: string): string[] {
-  const g = new Set<string>();
-  const re = new RegExp(`\\b(${ENTITY_TYPES_GID}):([^\\s<>"'\\)\\]]+)`, "g");
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
-    let idPart = m[2].replace(/[*_`]+$/, "").replace(/[.,;:!?)]+$/, "");
-    idPart = idPart.replace(/^[*_`]+/, "");
-    const t = `${m[1]}:${idPart}`.trim();
-    if (t.length > m[1].length + 1) g.add(t);
+const HIGHLIGHT_ID_RE = new RegExp(`^(${ENTITY_TYPES_GID}):\\S+`);
+
+function normalizeHighlightIds(ids: unknown[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const x of ids) {
+    if (typeof x !== "string") continue;
+    const t = x.trim();
+    if (!t || !HIGHLIGHT_ID_RE.test(t) || seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+    if (out.length >= 50) break;
   }
-  return [...g];
+  return out;
 }
 
-function mergeHighlightGids(fromData: string[], fromAnswer: string[], cap: number): string[] {
-  const s = new Set<string>();
-  for (const x of fromData) {
-    const t = String(x).trim();
-    if (t) s.add(t);
-    if (s.size >= cap) return [...s];
+/** Parse LLM answer JSON; on failure returns raw text and empty highlights. */
+function parseAnswerPayload(raw: string): { answer: string; highlightedNodeIds: string[] } {
+  try {
+    const o = extractJsonObject(raw) as { answer?: unknown; highlightedNodeIds?: unknown };
+    const answer = typeof o.answer === "string" ? o.answer.trim() : "";
+    const hl = normalizeHighlightIds(Array.isArray(o.highlightedNodeIds) ? o.highlightedNodeIds : []);
+    return {
+      answer: answer || "The model returned no answer text.",
+      highlightedNodeIds: hl,
+    };
+  } catch {
+    return { answer: raw.trim() || "Could not parse the model response as JSON.", highlightedNodeIds: [] };
   }
-  for (const x of fromAnswer) {
-    const t = String(x).trim();
-    if (t) s.add(t);
-    if (s.size >= cap) return [...s];
-  }
-  return [...s];
 }
 
-function extractGidsFromRows(rows: Record<string, unknown>[]): string[] {
+/** Derive graph ids from tabular rows (SQL or flattened Cypher). Optional rowLimit avoids flooding the graph on wide result sets. */
+function extractGidsFromRows(rows: Record<string, unknown>[], rowLimit?: number): string[] {
   const g = new Set<string>();
+  const toScan = rowLimit != null ? rows.slice(0, rowLimit) : rows;
   const keys = ["gid", "n_gid", "source", "target", "id", "billing_document", "sales_order", "delivery_document", "accounting_document"];
-  for (const row of rows) {
+  for (const row of toScan) {
     for (const k of Object.keys(row)) {
       const v = row[k];
       if (typeof v === "string" && v.includes(":")) {
@@ -88,6 +92,12 @@ function extractGidsFromRows(rows: Record<string, unknown>[]): string[] {
     const fy = row.fiscal_year ?? row.fiscalYear;
     if (typeof acc === "string" && acc && typeof cc === "string" && typeof fy === "string")
       g.add(`JournalEntry:${cc}|${fy}|${acc}`);
+    const prod = row.product ?? row.material ?? row.sku;
+    if (typeof prod === "string" && prod.trim()) g.add(`Product:${prod.trim()}`);
+    const bp = row.business_partner ?? row.businessPartner ?? row.sold_to_party ?? row.soldToParty;
+    if (typeof bp === "string" && bp.trim()) g.add(`BusinessPartner:${bp.trim()}`);
+    const plant = row.plant ?? row.production_plant ?? row.productionPlant;
+    if (typeof plant === "string" && plant.trim()) g.add(`Plant:${plant.trim()}`);
   }
   return [...g].slice(0, 50);
 }
@@ -170,14 +180,15 @@ export async function runNlQuery(
     const safe = validateSql(raw);
     const res = await pool.query(safe);
     data = res.rows as Record<string, unknown>[];
-    highlightedNodeIds = extractGidsFromRows(data);
     const ansRaw = await chatJson(
       client,
-      ANSWER_SYSTEM,
+      ANSWER_JSON_SYSTEM,
       `User question: ${query}\nSQL: ${safe}\nResult JSON: ${JSON.stringify(data).slice(0, 12000)}`,
     );
-    highlightedNodeIds = mergeHighlightGids(highlightedNodeIds, extractGidsFromMarkdown(ansRaw), 50);
-    return { answer: ansRaw, queryType: "sql", rawQuery: safe, data, highlightedNodeIds };
+    const parsed = parseAnswerPayload(ansRaw);
+    highlightedNodeIds =
+      parsed.highlightedNodeIds.length > 0 ? parsed.highlightedNodeIds : extractGidsFromRows(data, 24);
+    return { answer: parsed.answer, queryType: "sql", rawQuery: safe, data, highlightedNodeIds };
   }
 
   const safeCy = validateCypher(raw);
@@ -189,21 +200,24 @@ export async function runNlQuery(
     for (const rec of res.records) {
       const row: Record<string, unknown> = {};
       for (const key of rec.keys) {
+        const k = String(key);
         const v = rec.get(key);
-        row[key] = neoToPlain(v);
+        row[k] = neoToPlain(v);
         collectGidsFromNeoValue(v, gidSet);
       }
       rows.push(row);
     }
     data = rows;
-    highlightedNodeIds = [...gidSet].slice(0, 50);
+    let neoHighlights = [...gidSet].slice(0, 50);
     const ansRaw = await chatJson(
       client,
-      ANSWER_SYSTEM,
+      ANSWER_JSON_SYSTEM,
       `User question: ${query}\nCypher: ${safeCy}\nResult JSON: ${JSON.stringify(data).slice(0, 12000)}`,
     );
-    highlightedNodeIds = mergeHighlightGids(highlightedNodeIds, extractGidsFromMarkdown(ansRaw), 50);
-    return { answer: ansRaw, queryType: "cypher", rawQuery: safeCy, data, highlightedNodeIds };
+    const parsed = parseAnswerPayload(ansRaw);
+    highlightedNodeIds =
+      parsed.highlightedNodeIds.length > 0 ? parsed.highlightedNodeIds : neoHighlights;
+    return { answer: parsed.answer, queryType: "cypher", rawQuery: safeCy, data, highlightedNodeIds };
   } finally {
     await session.close();
   }

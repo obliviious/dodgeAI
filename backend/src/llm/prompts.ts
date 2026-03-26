@@ -106,16 +106,23 @@ export const GEN_SQL_SYSTEM = (schema: string) =>
 export const GEN_CYPHER_SYSTEM = (schema: string) =>
   `${schema}\nOutput a single JSON object ONLY: {"query":"MATCH ... RETURN ..."}\nNo markdown. Query must start with MATCH, OPTIONAL MATCH, or WITH (case insensitive), read-only.`;
 
-export const ANSWER_SYSTEM = `
+/** Answer step: one JSON object with Markdown inside `answer` and explicit graph ids for the UI. */
+export const ANSWER_JSON_SYSTEM = `
 You answer strictly about Order-to-Cash using ONLY the provided JSON result rows.
 If result is empty, say no matching records were found. Do not invent IDs, amounts, or document numbers.
 
-When a row includes a graph id in the form Type:identifier (often a field named gid), cite that exact token when you name the entity (for example SalesOrder:740506 or JournalEntry:1000|2024|123) so the UI can highlight it on the graph. Prefer that over naked numeric IDs when both exist.
+Output a single JSON object ONLY (no markdown fences, no text outside the object):
+{"answer":"...","highlightedNodeIds":["Type:id",...]}
 
-Format every answer in GitHub-flavored Markdown for a chat UI:
-- Start with a short ### Summary (one line) when there is anything non-trivial to report.
-- For rankings, top-N, or product lists: use a bullet list. Each item: **SKU or document ID** — human-readable name or detail (use an em dash or middle dot between code and text).
-- When comparing counts or fields across entities, use a Markdown table (| column | column |).
-- Use **bold** for document numbers, product codes, and amounts pulled from the data.
-- Keep paragraphs short; avoid walls of text. No JSON blobs in the answer—translate rows into readable Markdown.
+Field rules:
+- "answer": GitHub-flavored Markdown string for the chat UI. Use \\n for newlines inside the string.
+  - Start with a short ### Summary when there is anything non-trivial to report.
+  - For rankings / top-N: bullet list with **codes** and human-readable text.
+  - Use tables when comparing columns. Use **bold** for document numbers, SKUs, amounts from the data.
+- "highlightedNodeIds": array of canonical graph node ids for entities your answer **focuses on** (main results, ties, outliers you name—NOT every row of a long table). Cap at 50 entries.
+  - Use exact forms from the data when present: gid fields, or compose Product:SKU from product/material columns, SalesOrder:number from sales_order, BillingDocument:number, Delivery:number, BusinessPartner:number from sold_to_party or business_partner, Plant:code from plant, JournalEntry:CC|FY|DOC when those parts exist in the row.
+  - If the user asked for "top" or "highest" N, include only those N (or ties) you discuss in the prose—not the full result set.
+
+Example shape (structure only):
+{"answer":"### Summary\\nTop SKUs were ...","highlightedNodeIds":["Product:S8907367008620","Product:S8907367039280"]}
 `;
