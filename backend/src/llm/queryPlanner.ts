@@ -33,6 +33,38 @@ function validateCypher(q: string): string {
   return t;
 }
 
+const ENTITY_TYPES_GID =
+  "SalesOrder|Delivery|BillingDocument|JournalEntry|Payment|BusinessPartner|Product|Plant|SalesOrderItem";
+
+/** Pull canonical `Type:id` mentions out of assistant Markdown (bold, lists, tables). */
+function extractGidsFromMarkdown(text: string): string[] {
+  const g = new Set<string>();
+  const re = new RegExp(`\\b(${ENTITY_TYPES_GID}):([^\\s<>"'\\)\\]]+)`, "g");
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    let idPart = m[2].replace(/[*_`]+$/, "").replace(/[.,;:!?)]+$/, "");
+    idPart = idPart.replace(/^[*_`]+/, "");
+    const t = `${m[1]}:${idPart}`.trim();
+    if (t.length > m[1].length + 1) g.add(t);
+  }
+  return [...g];
+}
+
+function mergeHighlightGids(fromData: string[], fromAnswer: string[], cap: number): string[] {
+  const s = new Set<string>();
+  for (const x of fromData) {
+    const t = String(x).trim();
+    if (t) s.add(t);
+    if (s.size >= cap) return [...s];
+  }
+  for (const x of fromAnswer) {
+    const t = String(x).trim();
+    if (t) s.add(t);
+    if (s.size >= cap) return [...s];
+  }
+  return [...s];
+}
+
 function extractGidsFromRows(rows: Record<string, unknown>[]): string[] {
   const g = new Set<string>();
   const keys = ["gid", "n_gid", "source", "target", "id", "billing_document", "sales_order", "delivery_document", "accounting_document"];
@@ -40,7 +72,7 @@ function extractGidsFromRows(rows: Record<string, unknown>[]): string[] {
     for (const k of Object.keys(row)) {
       const v = row[k];
       if (typeof v === "string" && v.includes(":")) {
-        if (/^(SalesOrder|Delivery|BillingDocument|JournalEntry|Payment|BusinessPartner|Product|Plant|SalesOrderItem):/.test(v))
+        if (new RegExp(`^(${ENTITY_TYPES_GID}):`).test(v))
           g.add(v);
       }
       if (k === "gid" && typeof v === "string") g.add(v);
@@ -144,6 +176,7 @@ export async function runNlQuery(
       ANSWER_SYSTEM,
       `User question: ${query}\nSQL: ${safe}\nResult JSON: ${JSON.stringify(data).slice(0, 12000)}`,
     );
+    highlightedNodeIds = mergeHighlightGids(highlightedNodeIds, extractGidsFromMarkdown(ansRaw), 50);
     return { answer: ansRaw, queryType: "sql", rawQuery: safe, data, highlightedNodeIds };
   }
 
@@ -169,6 +202,7 @@ export async function runNlQuery(
       ANSWER_SYSTEM,
       `User question: ${query}\nCypher: ${safeCy}\nResult JSON: ${JSON.stringify(data).slice(0, 12000)}`,
     );
+    highlightedNodeIds = mergeHighlightGids(highlightedNodeIds, extractGidsFromMarkdown(ansRaw), 50);
     return { answer: ansRaw, queryType: "cypher", rawQuery: safeCy, data, highlightedNodeIds };
   } finally {
     await session.close();

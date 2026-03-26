@@ -10,6 +10,7 @@ function edgeDedupeKey(e: { data: Record<string, unknown> }): string {
 
 /** Union two graph payloads by node id and edge identity (stable for cytoscape). */
 export function mergeGraphPayload(a: GraphPayload, b: GraphPayload): GraphPayload {
+  if (b.nodes.length === 0 && b.edges.length === 0) return a;
   const nodeById = new Map<string, { data: Record<string, unknown> }>();
   for (const n of a.nodes) nodeById.set(String(n.data.id), n);
   for (const n of b.nodes) {

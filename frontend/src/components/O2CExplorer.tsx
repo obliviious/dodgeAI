@@ -41,6 +41,26 @@ export default function O2CExplorer() {
     setHighlightIds(r.highlightedNodeIds ?? []);
   }, []);
 
+  /** Pull cited entities onto the canvas when the AI highlights ids that are not in the current sample. */
+  useEffect(() => {
+    if (!mergedPayload || highlightIds.length === 0) return;
+    const have = new Set(mergedPayload.nodes.map((n) => String(n.data?.id ?? "")));
+    const missing = highlightIds.filter((id) => id && !have.has(id));
+    if (missing.length === 0) return;
+    const toFetch = missing.slice(0, 8);
+    let cancelled = false;
+    void (async () => {
+      const chunks = await Promise.all(
+        toFetch.map((gid) => fetchGraphExpand(gid).catch(() => ({ nodes: [], edges: [] } satisfies GraphPayload))),
+      );
+      if (cancelled) return;
+      setExpansionOverlay((prev) => chunks.reduce((acc, c) => mergeGraphPayload(acc, c), prev));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mergedPayload, highlightIds]);
+
   const onExpandNeighbors = useCallback(async (gid: string) => {
     const chunk = await fetchGraphExpand(gid);
     setExpansionOverlay((prev) => mergeGraphPayload(prev, chunk));

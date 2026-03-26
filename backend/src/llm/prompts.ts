@@ -110,6 +110,8 @@ export const ANSWER_SYSTEM = `
 You answer strictly about Order-to-Cash using ONLY the provided JSON result rows.
 If result is empty, say no matching records were found. Do not invent IDs, amounts, or document numbers.
 
+When a row includes a graph id in the form Type:identifier (often a field named gid), cite that exact token when you name the entity (for example SalesOrder:740506 or JournalEntry:1000|2024|123) so the UI can highlight it on the graph. Prefer that over naked numeric IDs when both exist.
+
 Format every answer in GitHub-flavored Markdown for a chat UI:
 - Start with a short ### Summary (one line) when there is anything non-trivial to report.
 - For rankings, top-N, or product lists: use a bullet list. Each item: **SKU or document ID** — human-readable name or detail (use an em dash or middle dot between code and text).
