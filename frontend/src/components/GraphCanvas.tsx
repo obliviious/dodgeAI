@@ -14,39 +14,40 @@ function primaryLabel(data: Record<string, unknown>): string {
 }
 
 function stylesheet(): cytoscape.StylesheetJson {
+  /* Cytoscape typings expect string CSS values (e.g. px) for many node props. */
   return [
     {
       selector: "node",
       style: {
         label: "data(name)",
-        "font-size": 10,
+        "font-size": "10px",
         color: "#0f172a",
         "text-valign": "center",
         "text-halign": "center",
         "text-wrap": "wrap",
-        "text-max-width": 80,
+        "text-max-width": "80px",
         "background-color": "#e11d48",
-        width: 18,
-        height: 18,
-        "border-width": 1,
+        width: "18px",
+        height: "18px",
+        "border-width": "1px",
         "border-color": "#fda4af",
       },
     },
     {
       selector: 'node[primary = "yes"]',
       style: {
-        width: 34,
-        height: 34,
+        width: "34px",
+        height: "34px",
         "background-color": "#60a5fa",
         "border-color": "#1d4ed8",
-        "font-size": 11,
+        "font-size": "11px",
         "font-weight": 600,
       },
     },
     {
       selector: "node.hl",
       style: {
-        "border-width": 4,
+        "border-width": "4px",
         "border-color": "#1d4ed8",
         "background-color": "#3b82f6",
       },
@@ -54,9 +55,9 @@ function stylesheet(): cytoscape.StylesheetJson {
     {
       selector: "node.granular",
       style: {
-        width: 14,
-        height: 14,
-        "font-size": 8,
+        width: "14px",
+        height: "14px",
+        "font-size": "8px",
         "background-color": "#fb7185",
         "border-color": "#fda4af",
       },
@@ -64,7 +65,7 @@ function stylesheet(): cytoscape.StylesheetJson {
     {
       selector: "edge",
       style: {
-        width: 1.5,
+        width: "1.5px",
         "line-color": "#cbd5e1",
         "target-arrow-color": "#cbd5e1",
         "curve-style": "bezier",
@@ -74,7 +75,7 @@ function stylesheet(): cytoscape.StylesheetJson {
     {
       selector: "edge.highlight",
       style: {
-        width: 3,
+        width: "3px",
         "line-color": "#2563eb",
         "target-arrow-color": "#2563eb",
         opacity: 1,
