@@ -36,15 +36,7 @@ function stylesheet(): cytoscape.StylesheetJson {
       },
     },
     {
-      selector: "node.hl",
-      style: {
-        "border-width": "5px",
-        "border-color": "#f59e0b",
-        "z-index": 10,
-      },
-    },
-    {
-      selector: "node.granular",
+      selector: "node.granular:not(.hl)",
       style: {
         width: "14px",
         height: "14px",
@@ -64,14 +56,16 @@ function stylesheet(): cytoscape.StylesheetJson {
     {
       selector: "edge.highlight",
       style: {
-        width: "3px",
-        "line-color": "#2563eb",
-        "target-arrow-color": "#2563eb",
+        width: "4px",
+        "line-color": "#1d4ed8",
+        "target-arrow-color": "#1d4ed8",
         opacity: 1,
+        "line-style": "solid",
+        "z-index": 8,
       },
     },
     {
-      selector: "node.neighbor",
+      selector: "node.neighbor:not(.hl)",
       style: {
         "border-width": "3px",
         "border-color": "#0369a1",
@@ -84,6 +78,21 @@ function stylesheet(): cytoscape.StylesheetJson {
         "line-color": "#334155",
         "target-arrow-color": "#334155",
         opacity: 1,
+      },
+    },
+    /* Last: query/AI highlights — must win over granular + neighbor sizing. */
+    {
+      selector: "node.hl",
+      style: {
+        width: "52px",
+        height: "52px",
+        "border-width": "8px",
+        "border-color": "#b45309",
+        "z-index": 999,
+        "overlay-opacity": 0.5,
+        "overlay-color": "#fbbf24",
+        "overlay-padding": "10px",
+        "overlay-shape": "ellipse",
       },
     },
   ];
