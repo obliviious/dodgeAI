@@ -20,9 +20,7 @@ async function main() {
   app.use(express.json({ limit: "1mb" }));
 
   const pool = createPool(databaseUrl);
-  await migrate(pool).catch((e) => {
-    console.warn("Postgres migrate failed (tables may already exist):", e);
-  });
+
   const driver = createDriver(neo4jUri, neo4jUser, neo4jPassword);
   await verifyConnectivity(driver).catch(() => {
     console.warn("Neo4j not reachable at startup; graph/query may fail until it is up.");
