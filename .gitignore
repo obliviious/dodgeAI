@@ -1,0 +1,5 @@
+node_modules
+.env
+dist
+sap-o2c-data
+.next

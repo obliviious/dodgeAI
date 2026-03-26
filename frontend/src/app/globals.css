@@ -1,0 +1,160 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&display=swap");
+
+:root {
+  --bg: #f6f7fb;
+  --panel: #ffffff;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --accent: #2563eb;
+  --accent-soft: #dbeafe;
+  --rose: #e11d48;
+  --rose-soft: #ffe4e8;
+  --success: #16a34a;
+  --shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+  --radius: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: radial-gradient(1200px 800px at 12% -10%, #e8efff 0%, transparent 55%),
+    radial-gradient(900px 600px at 92% 0%, #ffe8f0 0%, transparent 50%), var(--bg);
+  color: var(--ink);
+  font-family: "DM Sans", system-ui, sans-serif;
+}
+
+h1,
+h2,
+h3,
+.display {
+  font-family: "Fraunces", "Georgia", serif;
+}
+
+a {
+  color: var(--accent);
+}
+
+/* Chat assistant/user markdown */
+.chat-markdown {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.chat-markdown--user .chat-markdown__strong {
+  color: inherit;
+}
+
+.chat-markdown__h,
+.chat-markdown__subh {
+  font-family: "Fraunces", "Georgia", serif;
+  font-weight: 600;
+  margin: 0.75rem 0 0.4rem;
+  line-height: 1.25;
+}
+
+.chat-markdown__h:first-child,
+.chat-markdown__subh:first-child {
+  margin-top: 0;
+}
+
+.chat-markdown__h {
+  font-size: 1.05rem;
+}
+
+.chat-markdown__subh {
+  font-size: 0.98rem;
+  color: var(--muted);
+}
+
+.chat-markdown__p {
+  margin: 0.4rem 0;
+}
+
+.chat-markdown__p:first-child {
+  margin-top: 0;
+}
+
+.chat-markdown__ul,
+.chat-markdown__ol {
+  margin: 0.45rem 0;
+  padding-left: 1.35rem;
+}
+
+.chat-markdown__li {
+  margin: 0.35rem 0;
+}
+
+.chat-markdown__li::marker {
+  color: var(--accent);
+}
+
+.chat-markdown__strong {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.chat-markdown--user .chat-markdown__li::marker {
+  color: #1d4ed8;
+}
+
+.chat-markdown__code {
+  font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;
+  font-size: 0.88em;
+  background: rgba(15, 23, 42, 0.06);
+  padding: 0.12em 0.4em;
+  border-radius: 4px;
+}
+
+.chat-markdown__pre {
+  margin: 0.5rem 0;
+  padding: 10px 12px;
+  background: rgba(15, 23, 42, 0.06);
+  border-radius: 8px;
+  overflow: auto;
+  font-size: 12px;
+}
+
+.chat-markdown__pre .chat-markdown__code {
+  background: transparent;
+  padding: 0;
+}
+
+.chat-markdown__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 0.6rem 0;
+}
+
+.chat-markdown__table th,
+.chat-markdown__table td {
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.chat-markdown__table th {
+  background: rgba(37, 99, 235, 0.06);
+  font-weight: 600;
+}
+
+.chat-markdown__hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 0.75rem 0;
+}
+
+.chat-markdown__bq {
+  margin: 0.5rem 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--accent);
+  color: var(--muted);
+}

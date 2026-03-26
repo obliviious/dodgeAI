@@ -1,0 +1,113 @@
+import express, { type Router } from "express";
+import type { Driver } from "neo4j-driver";
+import neo4j from "neo4j-driver";
+
+function errMsg(e: unknown) {
+  return e instanceof Error ? e.message : String(e);
+}
+
+function neoNodeToJson(n: unknown) {
+  if (n && typeof n === "object" && "properties" in n) {
+    const p = (n as { properties: Record<string, unknown>; labels?: string[] }).properties;
+    const labels = (n as { labels?: string[] }).labels;
+    return { labels, ...p };
+  }
+  return n;
+}
+
+export function graphRouter(driver: Driver): Router {
+  const r = express.Router();
+
+  r.get("/graph", async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 400, 2000);
+    const session = driver.session();
+    try {
+      const nodeLimit = neo4j.int(Math.max(50, Math.floor(limit * 0.6)));
+      const edgeLimit = neo4j.int(limit);
+
+      const nodeRes = await session.run(
+        `
+        MATCH (n)
+        WHERE n.gid IS NOT NULL
+        RETURN labels(n)[0] AS label, n.gid AS id, properties(n) AS props
+        LIMIT $nodeLimit
+        `,
+        { nodeLimit },
+      );
+      const nodes = nodeRes.records.map((rec) => {
+        const props = (rec.get("props") as Record<string, unknown>) ?? {};
+        return {
+          data: {
+            id: rec.get("id") as string,
+            label: rec.get("label") as string,
+            ...props,
+          },
+        };
+      });
+
+      const edgeRes = await session.run(
+        `
+        MATCH (a)-[r]->(b)
+        WHERE a.gid IS NOT NULL AND b.gid IS NOT NULL
+        RETURN elementId(r) AS eid, type(r) AS relType, a.gid AS source, b.gid AS target
+        LIMIT $edgeLimit
+        `,
+        { edgeLimit },
+      );
+      const edges = edgeRes.records.map((rec) => ({
+        data: {
+          id: String(rec.get("eid") ?? `${rec.get("source")}-${rec.get("relType")}-${rec.get("target")}`),
+          source: rec.get("source") as string,
+          target: rec.get("target") as string,
+          label: rec.get("relType") as string,
+        },
+      }));
+
+      res.json({ nodes, edges });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: errMsg(e) });
+    } finally {
+      await session.close();
+    }
+  });
+
+  r.get("/graph/node/:type/:id", async (req, res) => {
+    const { type, id } = req.params;
+    const session = driver.session();
+    try {
+      const gid =
+        type === "JournalEntry" && id.includes("|")
+          ? `JournalEntry:${id}`
+          : `${type}:${decodeURIComponent(id)}`;
+
+      const result = await session.run(
+        `
+        MATCH (n { gid: $gid })
+        OPTIONAL MATCH (n)-[r]-(m)
+        WHERE m.gid IS NOT NULL
+        RETURN n,
+               collect(DISTINCT {
+                 rel: type(r),
+                 other: m.gid,
+                 dir: CASE WHEN startNode(r) = n THEN 'out' ELSE 'in' END
+               }) AS links
+        `,
+        { gid },
+      );
+      if (!result.records.length) {
+        res.status(404).json({ error: "Node not found" });
+        return;
+      }
+      const rec = result.records[0];
+      res.json({ node: neoNodeToJson(rec.get("n")), links: rec.get("links") });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: errMsg(e) });
+    } finally {
+      await session.close();
+    }
+  });
+
+  return r;
+}
