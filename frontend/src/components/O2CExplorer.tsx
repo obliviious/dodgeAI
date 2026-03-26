@@ -37,6 +37,10 @@ export default function O2CExplorer() {
     };
   }, []);
 
+  const onQueryStart = useCallback(() => {
+    setHighlightIds([]);
+  }, []);
+
   const onQueryResult = useCallback((r: QueryResponse) => {
     setHighlightIds(r.highlightedNodeIds ?? []);
   }, []);
@@ -202,7 +206,7 @@ export default function O2CExplorer() {
           )}
         </section>
 
-        <ChatPanel onQueryResult={onQueryResult} />
+        <ChatPanel onQueryResult={onQueryResult} onQueryStart={onQueryStart} />
       </div>
     </div>
   );

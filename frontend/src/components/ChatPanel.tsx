@@ -8,8 +8,11 @@ type Msg = { role: "user" | "assistant"; content: string };
 
 export default function ChatPanel({
   onQueryResult,
+  onQueryStart,
 }: {
   onQueryResult: (r: QueryResponse) => void;
+  /** Called as soon as the user submits a new question (before the API returns). */
+  onQueryStart?: () => void;
 }) {
   const [messages, setMessages] = useState<Msg[]>([
     {
@@ -30,6 +33,7 @@ export default function ChatPanel({
     const q = input.trim();
     if (!q || busy) return;
     setInput("");
+    onQueryStart?.();
     setBusy(true);
     setStatus("Dodge AI is reasoning over your O2C data…");
     const next: Msg[] = [...messages, { role: "user", content: q }];
