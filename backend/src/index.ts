@@ -1,10 +1,11 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import { createPool } from "./db/postgres.js";
+import { createPool, migrate } from "./db/postgres.js";
 import { createDriver, verifyConnectivity } from "./db/neo4j.js";
 import { graphRouter } from "./routes/graph.js";
 import { createGroqClient } from "./llm/groq.js";
+import { chatRouter } from "./routes/chat.js";
 import { queryRouter } from "./routes/query.js";
 
 const port = Number(process.env.PORT) || 4000;
@@ -19,6 +20,9 @@ async function main() {
   app.use(express.json({ limit: "1mb" }));
 
   const pool = createPool(databaseUrl);
+  await migrate(pool).catch((e) => {
+    console.warn("Postgres migrate failed (tables may already exist):", e);
+  });
   const driver = createDriver(neo4jUri, neo4jUser, neo4jPassword);
   await verifyConnectivity(driver).catch(() => {
     console.warn("Neo4j not reachable at startup; graph/query may fail until it is up.");
@@ -36,6 +40,7 @@ async function main() {
   });
 
   app.use("/api", graphRouter(driver));
+  app.use("/api", chatRouter(pool));
   app.use("/api", queryRouter(groq, pool, driver));
 
   app.listen(port, () => {

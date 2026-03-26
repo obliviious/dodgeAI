@@ -481,6 +481,29 @@ CREATE TABLE IF NOT EXISTS plants (
 );
 `;
 
+/** Dodge AI chat: conversations + one row per message (role/content columns). Applied after O2C DDL. */
+export const CHAT_STORAGE_MIGRATE_SQL = `
+CREATE TABLE IF NOT EXISTS chat_conversations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL DEFAULT 'New chat',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id BIGSERIAL PRIMARY KEY,
+  conversation_id UUID NOT NULL REFERENCES chat_conversations(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT chat_messages_role_chk CHECK (role IN ('user', 'assistant', 'system'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation_id_created
+  ON chat_messages (conversation_id, id);
+`;
+
 export async function migrate(pool: pg.Pool) {
   await pool.query(MIGRATE_SQL);
+  await pool.query(CHAT_STORAGE_MIGRATE_SQL);
 }

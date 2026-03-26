@@ -8,7 +8,8 @@
     "start": "node dist/index.js",
     "build": "tsc",
     "ingest": "tsx src/ingestion/ingest.ts",
-    "db:report": "tsx src/scripts/reportDbStats.ts"
+    "db:report": "tsx src/scripts/reportDbStats.ts",
+    "db:migrate": "tsx src/scripts/migrateDb.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",
