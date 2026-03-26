@@ -72,6 +72,76 @@ export function graphRouter(driver: Driver): Router {
     }
   });
 
+  /** One-hop neighborhood as cytoscape-style nodes + edges (for “expand” in UI). */
+  r.get("/graph/expand", async (req, res) => {
+    const gidRaw = req.query.gid;
+    if (!gidRaw || typeof gidRaw !== "string") {
+      res.status(400).json({ error: "Query parameter gid is required" });
+      return;
+    }
+    const gid = decodeURIComponent(gidRaw);
+    const session = driver.session();
+    try {
+      const result = await session.run(
+        `
+        MATCH (n { gid: $gid })
+        OPTIONAL MATCH (n)-[r]-(m)
+        WHERE m IS NOT NULL AND m.gid IS NOT NULL
+        WITH n, collect(DISTINCT m) AS ms, collect(DISTINCT r) AS rs
+        WITH [n] + ms AS nodeList, rs AS relList
+        RETURN
+          [x IN nodeList | {
+            id: x.gid,
+            label: head(labels(x)),
+            props: properties(x)
+          }] AS nodes,
+          [rel IN relList WHERE rel IS NOT NULL | {
+            id: elementId(rel),
+            relType: type(rel),
+            source: startNode(rel).gid,
+            target: endNode(rel).gid
+          }] AS edges
+        `,
+        { gid },
+      );
+      if (!result.records.length) {
+        res.status(404).json({ error: "Node not found" });
+        return;
+      }
+      const rec = result.records[0];
+      const rawNodes = rec.get("nodes") as { id: string; label: string; props: Record<string, unknown> }[];
+      const rawEdges = rec.get("edges") as {
+        id: string;
+        relType: string;
+        source: string;
+        target: string;
+      }[];
+
+      const nodes = rawNodes.map(({ id, label, props }) => ({
+        data: {
+          id,
+          label,
+          ...props,
+        },
+      }));
+      const edges = rawEdges.map((e) => ({
+        data: {
+          id: String(e.id),
+          source: e.source,
+          target: e.target,
+          label: e.relType,
+        },
+      }));
+
+      res.json({ nodes, edges });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: errMsg(e) });
+    } finally {
+      await session.close();
+    }
+  });
+
   r.get("/graph/node/:type/:id", async (req, res) => {
     const { type, id } = req.params;
     const session = driver.session();

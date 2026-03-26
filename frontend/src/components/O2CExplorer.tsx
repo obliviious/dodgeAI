@@ -1,25 +1,33 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import GraphCanvas from "./GraphCanvas";
+import GraphLegend from "./GraphLegend";
 import ChatPanel from "./ChatPanel";
 import NodeDetail from "./NodeDetail";
-import { fetchGraph, type GraphPayload, type QueryResponse } from "@/lib/api";
+import { fetchGraph, fetchGraphExpand, type GraphPayload, type QueryResponse } from "@/lib/api";
+import { mergeGraphPayload } from "@/lib/graphMerge";
 
 export default function O2CExplorer() {
-  const [payload, setPayload] = useState<GraphPayload | null>(null);
+  const [basePayload, setBasePayload] = useState<GraphPayload | null>(null);
+  const [expansionOverlay, setExpansionOverlay] = useState<GraphPayload>({ nodes: [], edges: [] });
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [highlightIds, setHighlightIds] = useState<string[]>([]);
   const [hideGranular, setHideGranular] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
 
+  const mergedPayload = useMemo(() => {
+    if (!basePayload) return null;
+    return mergeGraphPayload(basePayload, expansionOverlay);
+  }, [basePayload, expansionOverlay]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const g = await fetchGraph(650);
-        if (!cancelled) setPayload(g);
+        if (!cancelled) setBasePayload(g);
       } catch (e) {
         if (!cancelled) setLoadErr(e instanceof Error ? e.message : String(e));
       }
@@ -32,6 +40,18 @@ export default function O2CExplorer() {
   const onQueryResult = useCallback((r: QueryResponse) => {
     setHighlightIds(r.highlightedNodeIds ?? []);
   }, []);
+
+  const onExpandNeighbors = useCallback(async (gid: string) => {
+    const chunk = await fetchGraphExpand(gid);
+    setExpansionOverlay((prev) => mergeGraphPayload(prev, chunk));
+  }, []);
+
+  const selectedGid =
+    selected && typeof selected.gid === "string"
+      ? selected.gid
+      : selected && selected.id != null
+        ? String(selected.id)
+        : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", minHeight: 0 }}>
@@ -122,17 +142,42 @@ export default function O2CExplorer() {
             >
               {hideGranular ? "Show granular overlay" : "Hide granular overlay"}
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setExpansionOverlay({ nodes: [], edges: [] });
+                setSelected(null);
+              }}
+              style={{
+                border: "1px solid var(--line)",
+                background: "white",
+                borderRadius: 999,
+                padding: "8px 14px",
+                cursor: "pointer",
+                fontWeight: 600,
+                boxShadow: "0 6px 20px rgba(15,23,42,0.08)",
+              }}
+              title="Collapse expanded nodes back to the initial sample"
+            >
+              Reset graph
+            </button>
           </div>
 
           {!minimized && (
             <>
               <GraphCanvas
-                payload={payload}
+                payload={mergedPayload}
                 highlightIds={highlightIds}
                 hideGranular={hideGranular}
+                selectedGid={selectedGid}
                 onSelect={setSelected}
               />
-              <NodeDetail data={selected} onClose={() => setSelected(null)} />
+              <GraphLegend />
+              <NodeDetail
+                data={selected}
+                onClose={() => setSelected(null)}
+                onExpandNeighbors={onExpandNeighbors}
+              />
             </>
           )}
         </section>

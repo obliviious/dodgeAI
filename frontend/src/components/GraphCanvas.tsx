@@ -3,29 +3,9 @@
 import { useEffect, useRef } from "react";
 import cytoscape from "cytoscape";
 import type { GraphPayload } from "@/lib/api";
+import { GRANULAR_LABELS, paletteForLabel } from "@/lib/graphNodePalette";
 
 type CytoscapeCore = cytoscape.Core;
-
-const GRANULAR_LABELS = new Set(["SalesOrderItem", "Product", "Plant", "BusinessPartner"]);
-
-/** Fill + border per Neo4j label (O2C domain). */
-const NODE_TYPE_PALETTE: Record<string, { fill: string; border: string }> = {
-  SalesOrder: { fill: "#60a5fa", border: "#1e40af" },
-  Delivery: { fill: "#22d3ee", border: "#0e7490" },
-  BillingDocument: { fill: "#a78bfa", border: "#5b21b6" },
-  JournalEntry: { fill: "#2dd4bf", border: "#0f766e" },
-  Payment: { fill: "#4ade80", border: "#166534" },
-  BusinessPartner: { fill: "#f472b6", border: "#9d174d" },
-  Product: { fill: "#fb923c", border: "#9a3412" },
-  Plant: { fill: "#bef264", border: "#3f6212" },
-  SalesOrderItem: { fill: "#fca5a5", border: "#991b1b" },
-};
-
-const NODE_DEFAULT_PALETTE = { fill: "#cbd5e1", border: "#475569" };
-
-function paletteForLabel(label: string) {
-  return NODE_TYPE_PALETTE[label] ?? NODE_DEFAULT_PALETTE;
-}
 
 function primaryLabel(data: Record<string, unknown>): string {
   const l = data.label;
@@ -38,13 +18,8 @@ function stylesheet(): cytoscape.StylesheetJson {
     {
       selector: "node",
       style: {
-        label: "data(name)",
-        "font-size": "10px",
-        color: "#0f172a",
-        "text-valign": "center",
-        "text-halign": "center",
-        "text-wrap": "wrap",
-        "text-max-width": "80px",
+        label: "",
+        "text-opacity": 0,
         "background-color": "data(kindColor)",
         "border-color": "data(kindBorder)",
         width: "18px",
@@ -57,8 +32,6 @@ function stylesheet(): cytoscape.StylesheetJson {
       style: {
         width: "34px",
         height: "34px",
-        "font-size": "11px",
-        "font-weight": 600,
         "border-width": "2px",
       },
     },
@@ -75,7 +48,6 @@ function stylesheet(): cytoscape.StylesheetJson {
       style: {
         width: "14px",
         height: "14px",
-        "font-size": "8px",
         "border-width": "1px",
       },
     },
@@ -95,6 +67,22 @@ function stylesheet(): cytoscape.StylesheetJson {
         width: "3px",
         "line-color": "#2563eb",
         "target-arrow-color": "#2563eb",
+        opacity: 1,
+      },
+    },
+    {
+      selector: "node.neighbor",
+      style: {
+        "border-width": "3px",
+        "border-color": "#0369a1",
+      },
+    },
+    {
+      selector: "edge.neighbor",
+      style: {
+        width: "2.5px",
+        "line-color": "#334155",
+        "target-arrow-color": "#334155",
         opacity: 1,
       },
     },
@@ -157,11 +145,14 @@ export default function GraphCanvas({
   payload,
   highlightIds,
   hideGranular,
+  selectedGid,
   onSelect,
 }: {
   payload: GraphPayload | null;
   highlightIds: string[];
   hideGranular: boolean;
+  /** Node id (same as Neo4j gid) for selection + neighborhood highlighting. */
+  selectedGid: string | null;
   onSelect: (node: Record<string, unknown> | null) => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
@@ -178,6 +169,8 @@ export default function GraphCanvas({
       container: host.current,
       elements: els,
       style: stylesheet(),
+      selectionType: "single",
+      boxSelectionEnabled: false,
       layout: {
         name: "cose",
         animate: false,
@@ -188,11 +181,16 @@ export default function GraphCanvas({
     });
     cyRef.current = cy;
     cy.on("tap", "node", (evt) => {
+      cy.elements().unselect();
+      evt.target.select();
       const d = evt.target.data() as Record<string, unknown>;
       onSelect(d);
     });
     cy.on("tap", (evt) => {
-      if (evt.target === cy) onSelect(null);
+      if (evt.target === cy) {
+        cy.elements().unselect();
+        onSelect(null);
+      }
     });
     return () => {
       cy.destroy();
@@ -216,6 +214,18 @@ export default function GraphCanvas({
       if (set.has(s) && set.has(t)) e.addClass("highlight");
     });
   }, [highlightIds, payload, hideGranular]);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy || !payload) return;
+    cy.elements().removeClass("neighbor");
+    cy.elements("edge").removeClass("neighbor");
+    if (!selectedGid) return;
+    const n = cy.getElementById(selectedGid);
+    if (!n.nonempty() || !n.isNode()) return;
+    n.neighborhood("node").addClass("neighbor");
+    n.connectedEdges().addClass("neighbor");
+  }, [selectedGid, payload, hideGranular]);
 
   return (
     <div
