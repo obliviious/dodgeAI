@@ -51,24 +51,58 @@ function resolveCaPath(): string | null {
   return null;
 }
 
-function poolSslOptions(): { rejectUnauthorized: boolean; ca?: Buffer } | undefined {
-  if (process.env.DATABASE_SSL === "false") return undefined;
+/**
+ * CA for Aiven / managed Postgres. Order:
+ * 1) DATABASE_SSL_CA_PEM or PGSSL_CA_PEM — full PEM text (required on Vercel; no file on disk).
+ * 2) DATABASE_SSL_CA_BASE64 or PGSSL_CA_BASE64 — base64-encoded PEM (easier in some dashboards).
+ * 3) File from PGSSL_CA / DATABASE_SSL_CA / backend/ca.pem
+ */
+function resolveCaBuffer(): Buffer | null {
+  const inline =
+    process.env.DATABASE_SSL_CA_PEM ?? process.env.PGSSL_CA_PEM ?? process.env.AIVEN_CA_PEM;
+  if (inline?.trim()) {
+    const normalized = inline.trim().replace(/\\n/g, "\n");
+    return Buffer.from(normalized, "utf8");
+  }
+
+  const b64 =
+    process.env.DATABASE_SSL_CA_BASE64 ??
+    process.env.PGSSL_CA_BASE64 ??
+    process.env.AIVEN_CA_BASE64;
+  if (b64?.trim()) {
+    try {
+      return Buffer.from(b64.trim(), "base64");
+    } catch {
+      /* fall through */
+    }
+  }
 
   const caPath = resolveCaPath();
   if (caPath) {
-    return {
-      rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false",
-      ca: fs.readFileSync(caPath),
-    };
+    return fs.readFileSync(caPath);
   }
+
+  return null;
+}
+
+function poolSslOptions(): { rejectUnauthorized: boolean; ca?: Buffer } | undefined {
+  if (process.env.DATABASE_SSL === "false") return undefined;
 
   const needsSsl =
     process.env.DATABASE_SSL === "true" ||
     /(?:sslmode=require|aivencloud\.com)/i.test(process.env.DATABASE_URL ?? "");
 
+  const ca = resolveCaBuffer();
+  if (ca) {
+    return {
+      rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false",
+      ca,
+    };
+  }
+
   if (needsSsl) {
     console.warn(
-      "postgres: SSL expected (Aiven/remote) but ca.pem not found. Set PGSSL_CA or place ca.pem in backend/.",
+      "postgres: SSL expected (Aiven/remote) but no CA found. Set DATABASE_SSL_CA_PEM (or PGSSL_CA_PEM) with your CA PEM text in Vercel env, or DATABASE_SSL_CA_BASE64, or PGSSL_CA to a path on disk (local only).",
     );
     return { rejectUnauthorized: true };
   }
