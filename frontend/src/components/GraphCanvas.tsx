@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import cytoscape, { type Core, type Stylesheet } from "cytoscape";
+import cytoscape from "cytoscape";
 import type { GraphPayload } from "@/lib/api";
+
+type CytoscapeCore = cytoscape.Core;
 
 const GRANULAR_LABELS = new Set(["SalesOrderItem", "Product", "Plant", "BusinessPartner"]);
 
@@ -11,7 +13,7 @@ function primaryLabel(data: Record<string, unknown>): string {
   return typeof l === "string" ? l : "Entity";
 }
 
-function stylesheet(): Stylesheet[] {
+function stylesheet(): cytoscape.StylesheetJson {
   return [
     {
       selector: "node",
@@ -142,7 +144,7 @@ export default function GraphCanvas({
   onSelect: (node: Record<string, unknown> | null) => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
-  const cyRef = useRef<Core | null>(null);
+  const cyRef = useRef<CytoscapeCore | null>(null);
 
   useEffect(() => {
     if (!host.current || !payload) return;
