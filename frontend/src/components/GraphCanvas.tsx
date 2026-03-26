@@ -8,13 +8,32 @@ type CytoscapeCore = cytoscape.Core;
 
 const GRANULAR_LABELS = new Set(["SalesOrderItem", "Product", "Plant", "BusinessPartner"]);
 
+/** Fill + border per Neo4j label (O2C domain). */
+const NODE_TYPE_PALETTE: Record<string, { fill: string; border: string }> = {
+  SalesOrder: { fill: "#60a5fa", border: "#1e40af" },
+  Delivery: { fill: "#22d3ee", border: "#0e7490" },
+  BillingDocument: { fill: "#a78bfa", border: "#5b21b6" },
+  JournalEntry: { fill: "#2dd4bf", border: "#0f766e" },
+  Payment: { fill: "#4ade80", border: "#166534" },
+  BusinessPartner: { fill: "#f472b6", border: "#9d174d" },
+  Product: { fill: "#fb923c", border: "#9a3412" },
+  Plant: { fill: "#bef264", border: "#3f6212" },
+  SalesOrderItem: { fill: "#fca5a5", border: "#991b1b" },
+};
+
+const NODE_DEFAULT_PALETTE = { fill: "#cbd5e1", border: "#475569" };
+
+function paletteForLabel(label: string) {
+  return NODE_TYPE_PALETTE[label] ?? NODE_DEFAULT_PALETTE;
+}
+
 function primaryLabel(data: Record<string, unknown>): string {
   const l = data.label;
   return typeof l === "string" ? l : "Entity";
 }
 
 function stylesheet(): cytoscape.StylesheetJson {
-  /* Cytoscape typings expect string CSS values (e.g. px) for many node props. */
+  /* Colors from data(kindColor)/data(kindBorder); cytoscape uses string px for sizes. */
   return [
     {
       selector: "node",
@@ -26,11 +45,11 @@ function stylesheet(): cytoscape.StylesheetJson {
         "text-halign": "center",
         "text-wrap": "wrap",
         "text-max-width": "80px",
-        "background-color": "#e11d48",
+        "background-color": "data(kindColor)",
+        "border-color": "data(kindBorder)",
         width: "18px",
         height: "18px",
-        "border-width": "1px",
-        "border-color": "#fda4af",
+        "border-width": "2px",
       },
     },
     {
@@ -38,18 +57,17 @@ function stylesheet(): cytoscape.StylesheetJson {
       style: {
         width: "34px",
         height: "34px",
-        "background-color": "#60a5fa",
-        "border-color": "#1d4ed8",
         "font-size": "11px",
         "font-weight": 600,
+        "border-width": "2px",
       },
     },
     {
       selector: "node.hl",
       style: {
-        "border-width": "4px",
-        "border-color": "#1d4ed8",
-        "background-color": "#3b82f6",
+        "border-width": "5px",
+        "border-color": "#f59e0b",
+        "z-index": 10,
       },
     },
     {
@@ -58,8 +76,7 @@ function stylesheet(): cytoscape.StylesheetJson {
         width: "14px",
         height: "14px",
         "font-size": "8px",
-        "background-color": "#fb7185",
-        "border-color": "#fda4af",
+        "border-width": "1px",
       },
     },
     {
@@ -100,11 +117,14 @@ function toElements(payload: GraphPayload, hideGranular: boolean) {
       (d.item_key as string) ||
       label;
     const isGranular = GRANULAR_LABELS.has(label);
+    const { fill, border } = paletteForLabel(label);
     return {
       data: {
         ...d,
         id,
         name: String(name).slice(0, 42),
+        kindColor: fill,
+        kindBorder: border,
         primary: !isGranular && ["SalesOrder", "Delivery", "BillingDocument", "JournalEntry", "Payment"].includes(label) ? "yes" : "no",
         granular: isGranular ? "yes" : "no",
       },
